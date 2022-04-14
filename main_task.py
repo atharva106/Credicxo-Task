@@ -6,14 +6,17 @@
 #==============================================================================
 
 import os
+import time
 import json
-import random
 import pathlib
-import requests
+import warnings
 import pandas as pd
-from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 
-path_dir = pathlib.Path('/Users/atharva/Desktop/Credicxo Task')
+warnings.filterwarnings("ignore", category=DeprecationWarning) 
+
+path_dir = pathlib.Path('') # Enter the path to the directory here
 os.chdir(path_dir)
 
 pd.options.mode.chained_assignment = None
@@ -22,61 +25,80 @@ pd.options.mode.chained_assignment = None
 # Package Import
 #==============================================================================
 
-def scrape(country, asin):
-    url = 'https://www.amazon.' + str(country) + '/dp/' + str(asin)
+options = Options()
+# options.add_argument("--headless")
 
-    agents = ["Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/38.0.2125.111 Safari/537.36",
-            "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/28.0.1500.72 Safari/537.36",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10) AppleWebKit/600.1.25 (KHTML, like Gecko) Version/8.0 Safari/600.1.25",
-            "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:33.0) Gecko/20100101 Firefox/33.0",
-            "Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/38.0.2125.111 Safari/537.36",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/38.0.2125.111 Safari/537.36",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit/600.1.17 (KHTML, like Gecko) Version/7.1 Safari/537.85.10",
-            "Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko",
-            "Mozilla/5.0 (Windows NT 6.3; WOW64; rv:33.0) Gecko/20100101 Firefox/33.0",
-            "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/38.0.2125.104 Safari/537.36",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36"
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.1.1 Safari/605.1.15",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:77.0) Gecko/20100101 Firefox/77.0",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.97 Safari/537.36",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:77.0) Gecko/20100101 Firefox/77.0",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.97 Safari/537.36"]
+def scrape(url):
+    driver = webdriver.Chrome(options=options)
+    driver.get(url)
 
-    headers = {
-        "Accept" : "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9", 
-        "Accept-Encoding" : "gzip, deflate", 
-        "Dnt": "1", 
-        'User-Agent' : random.choice(agents)
-    }
+    title = None
+    price = None
+    description = None
+    img = None
 
-    r = requests.get(url, headers=headers)
+    # Get Title
+    try:
+        title = driver.find_element_by_id('productTitle').text
+    except:
+        print(url, 'not available')
+        return None
 
-    if int(r.status_code) != 404:
-        soup = BeautifulSoup(r.content, 'lxml')
+    # Get price
+    try:
+        price = driver.find_element_by_id('price').text
+    except:
+        pass
 
-        try:
-            title = soup.find('span', {'id' : 'productTitle'}).text.strip()
-            img = soup.find('div', {'class' : 'imgTagWrapper'}).find('img')['src']
-            price = soup.find('span', {'class' : 'a-price-whole'}).text.strip()+ soup.find('span', {'class' : 'a-price-fraction'}).text.strip() + soup.find('span', {'class' : 'a-price-symbol'}).text.strip()
-            
-            fb = soup.find('div', {'data-feature-name' : 'featurebullets'}).findAll('li')
-            features = [li.text.strip() for li in fb]
+    try:
+        price = driver.find_element_by_class_name('a-price-whole').text.strip() + driver.find_element_by_class_name('a-price-fraction').text.strip() + driver.find_element_by_class_name('a-price-symbol').text.strip()
+    except:
+        pass
 
-            print( {'title' : title, 
-                    'img' : img, 
-                    'price' : price, 
-                    'description' : features})
-        except:
-            return None
-    else:
-        print(url, 'not available!')
+    # Get description
+    try:
+        description = driver.find_element_by_id('featurebullets_feature_div').text.strip()
+    except:
+        pass
+    try:
+        description = driver.find_element_by_id('bookDescription_feature_div').text.strip()
+    except:
+        pass
+
+    # Get image url
+    try:
+        img = driver.find_element_by_id('imgTagWrapperId').find_element_by_tag_name('img').get_attribute('src')
+    except:
+        pass
+    try:
+        img = driver.find_element_by_id('img-canvas').find_element_by_tag_name('img').get_attribute('src')
+    except:
+        pass
+
+    return {'url' : str(url),
+            'title' : str(title),
+            'price' : str(price),
+            'description' : str(description),
+            'image' : str(img)}
 
 #=============================================================================
 # Working Code
 #=============================================================================
 
-df = pd.read_csv('amazon_scraping_sheet.csv')
+df = pd.read_csv('https://raw.githubusercontent.com/atharva106/Credicxo-Task/main/amazon_scraping_sheet.csv')
+
+data = []
 
 for i in df.index:
-    print(scrape(df['country'][i], df['Asin'][i]))
-    print()
+    url = 'https://www.amazon.' + str(df['country'][i]) + '/dp/' + str(df['Asin'][i])
+
+    product = scrape(url)
+
+    if product != None:
+        data.append(product)
+
+with open('products.json', 'w') as out:
+    json.dump(data, out)
+
+data = pd.DataFrame(data)
+data.to_csv('products.csv', index=False)
